@@ -27,33 +27,32 @@ def smoke(current_time, prev_time, particles, params):
     delta_t = current_time - prev_time
 
     for idx, particle in enumerate(particles_updated):
-        _update_particle(particle, idx, current_time, delta_t, params)
+        _update_particle(particle, delta_t, False, params)
 
     new_particles_amount = int(delta_t * params["particles_per_sec"])
     for idx in range(len(particles), len(particles) + new_particles_amount):
         particle = _create_particle(current_time, idx, params)
-        _update_particle(particle, idx, current_time, delta_t, params)
+        _update_particle(particle, delta_t, True, params)
         particles_updated.append(particle)
 
     return particles_updated
 
 
-def _update_particle(particle, particle_idx, current_time, delta_t, params):
+def _update_particle(particle, delta_t, is_new_particle, params):
     initial_velocity = (particle["X"][1], particle["Y"][1], particle["Z"][1])
-    _update_acceleration(particle, particle_idx, current_time, params)
+    _update_acceleration(particle, delta_t, is_new_particle, params)
     _update_velocity(particle, delta_t)
     _update_location(particle, initial_velocity, delta_t)
 
 
-def _update_acceleration(particle, particle_idx, current_time, params):
+def _update_acceleration(particle, delta_t, is_new_particle, params):
     g = _get_gravity_acceleration()
     drag_a = _get_drag_acceleration(particle, params)
-    buoyancy_a = _get_buoyancy_acceleration(current_time, particle_idx, params)
+    buoyancy_a = _get_buoyancy_acceleration(particle, delta_t, is_new_particle, params)
 
-    particle["Z"][2] += g
-    particle["Z"][2] += buoyancy_a
-    particle["X"][2] += drag_a[0]
-    particle["Y"][2] += drag_a[1]
+    particle["Z"][2] = g + buoyancy_a
+    particle["X"][2] = drag_a[0]
+    particle["Y"][2] = drag_a[1]
 
 
 def _get_gravity_acceleration():
@@ -71,11 +70,16 @@ def _get_drag_acceleration(particle, params):
     return drag_a
 
 
-def _get_buoyancy_acceleration(current_time, particle_idx, params):
-    time_emitted = particle_idx / params["particles_per_sec"]
-    time_alive = current_time - time_emitted
-    buoyancy_a = params["buoyancy"] * math.exp(-time_alive / params["buoyancy_const"])
-    return buoyancy_a
+def _get_buoyancy_acceleration(particle, delta_t, is_new_particle, params):
+    if is_new_particle:
+        return params["buoyancy"]
+    
+    g = _get_gravity_acceleration()
+    prev_buoyancy = particle["Z"][2] - g
+    # buoyancy_a = buoyancy * e^(-t / buoyancy_const)
+    decayed_buoyancy = prev_buoyancy * math.exp(-delta_t / params["buoyancy_const"])
+
+    return decayed_buoyancy
 
 
 def _update_velocity(particle, delta_t):
